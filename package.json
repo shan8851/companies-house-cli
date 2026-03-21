@@ -1,0 +1,64 @@
+{
+  "name": "@shan8851/companies-house-cli",
+  "version": "0.1.0",
+  "description": "Agent-friendly CLI for UK Companies House public data.",
+  "type": "module",
+  "bin": {
+    "ch": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "packageManager": "pnpm@10.23.0",
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/cli.js",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+    "check": "pnpm typecheck && pnpm lint && pnpm test"
+  },
+  "keywords": [
+    "companies-house",
+    "cli",
+    "uk",
+    "company-research",
+    "due-diligence",
+    "ai-agent",
+    "agents",
+    "openclaw",
+    "typescript"
+  ],
+  "author": "shan8851",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shan8851/companies-house-cli.git"
+  },
+  "homepage": "https://ch-cli.xyz",
+  "bugs": {
+    "url": "https://github.com/shan8851/companies-house-cli/issues"
+  },
+  "dependencies": {
+    "commander": "^14.0.1",
+    "dotenv": "^17.2.3",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.5.2",
+    "eslint": "^9.39.1",
+    "globals": "^16.4.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.1",
+    "vitest": "^3.2.4"
+  }
+}

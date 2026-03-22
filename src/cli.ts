@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { Command, CommanderError } from "commander";
@@ -63,8 +64,15 @@ export const runCli = async (
   }
 };
 
-const isEntrypoint =
-  process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1];
+const isEntrypoint = (() => {
+  if (process.argv[1] === undefined) return false;
+  const scriptPath = fileURLToPath(import.meta.url);
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(scriptPath);
+  } catch {
+    return scriptPath === process.argv[1];
+  }
+})();
 
 if (isEntrypoint) {
   const dependencies = createDefaultRuntimeDependencies();

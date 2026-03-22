@@ -1,6 +1,6 @@
 {
   "name": "@shan8851/companies-house-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Agent-friendly CLI for UK Companies House public data.",
   "type": "module",
   "bin": {

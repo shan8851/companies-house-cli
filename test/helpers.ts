@@ -58,13 +58,17 @@ export interface CapturedIo {
 export const createTestRuntimeDependencies = (
   fetchImplementation: typeof fetch,
   io: CapturedIo,
-  overrides?: Partial<Pick<RuntimeDependencies, "cwd" | "env">>
+  overrides?: Partial<
+    Pick<RuntimeDependencies, "cwd" | "env" | "stdoutColumns" | "stdoutIsTTY">
+  >
 ): RuntimeDependencies => ({
   cwd: overrides?.cwd ?? process.cwd(),
   env: overrides?.env ?? {
     COMPANIES_HOUSE_API_KEY: "test-api-key"
   },
   fetchImplementation,
+  stdoutColumns: overrides?.stdoutColumns ?? 80,
+  stdoutIsTTY: overrides?.stdoutIsTTY ?? false,
   writeStderr: (text) => {
     io.stderr += text;
   },

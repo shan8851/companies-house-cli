@@ -1,17 +1,19 @@
 import type { Command } from "commander";
 
+import { createColours } from "../lib/colours.js";
 import { normalizeCompanyNumber } from "../lib/companyNumber.js";
 import {
+  compactRowValues,
   formatDateOfBirth,
-  formatList,
-  renderKeyValueRows,
-  renderPaginationSummary
+  renderBulletedList,
+  renderPaginationSummary,
+  renderWrappedText
 } from "../lib/formatting.js";
 import { normalizePsc } from "../lib/normalizers.js";
 import { fetchPaginatedItems } from "../lib/pagination.js";
 import type { PscApiItem, PscListApiResponse } from "../types/api.js";
+import type { HumanRenderContext, RuntimeDependencies } from "../types/cli.js";
 import type { PscEnvelope } from "../types/normalized.js";
-import type { RuntimeDependencies } from "../types/cli.js";
 import {
   addListOptions,
   executeCommand,
@@ -25,69 +27,85 @@ interface PscCommandOptions {
   startIndex?: number;
 }
 
-const renderPscHuman = (envelope: PscEnvelope): string => {
+const renderPscSummaryLine = (
+  envelope: PscEnvelope,
+  context: HumanRenderContext
+): string | null => {
+  const colours = createColours(context.ansiEnabled);
+
+  if (envelope.data.summary.activeCount === null && envelope.data.summary.ceasedCount === null) {
+    return null;
+  }
+
+  return [
+    envelope.data.summary.activeCount !== null
+      ? colours.accentGreen(`${envelope.data.summary.activeCount} active`)
+      : null,
+    envelope.data.summary.ceasedCount !== null
+      ? colours.dim(`${envelope.data.summary.ceasedCount} ceased`)
+      : null
+  ]
+    .filter((value): value is string => value !== null)
+    .join(", ");
+};
+
+const renderPscHuman = (
+  envelope: PscEnvelope,
+  context: HumanRenderContext
+): string => {
+  const colours = createColours(context.ansiEnabled);
   const summaryLines = [
-    renderPaginationSummary(
-      envelope.pagination?.returnedCount ?? envelope.data.psc.length,
-      envelope.pagination?.totalResults ?? null,
-      envelope.pagination?.fetchedAll ?? false
+    colours.dim(
+      renderPaginationSummary(
+        envelope.pagination?.returnedCount ?? envelope.data.psc.length,
+        envelope.pagination?.totalResults ?? null,
+        envelope.pagination?.fetchedAll ?? false
+      )
     ),
-    ...renderKeyValueRows([
-      {
-        label: "Active PSC entries",
-        value:
-          envelope.data.summary.activeCount !== null
-            ? String(envelope.data.summary.activeCount)
-            : null
-      },
-      {
-        label: "Ceased PSC entries",
-        value:
-          envelope.data.summary.ceasedCount !== null
-            ? String(envelope.data.summary.ceasedCount)
-            : null
-      }
-    ])
-  ];
-
-  const pscLines =
+    renderPscSummaryLine(envelope, context)
+  ].filter((line): line is string => line !== null);
+  const pscBlocks =
     envelope.data.psc.length === 0
-      ? ["No persons with significant control found."]
-      : envelope.data.psc.flatMap((psc, index) => [
-          `${index + 1}. ${psc.name ?? psc.description ?? "Unknown PSC"} | ${psc.kind ?? "kind unknown"}`,
-          ...renderKeyValueRows([
-            {
-              label: "   Notified",
-              value: psc.notifiedOn
-            },
-            {
-              label: "   Ceased",
-              value: psc.ceasedOn
-            },
-            {
-              label: "   Nationality",
-              value: psc.nationality
-            },
-            {
-              label: "   Country of residence",
-              value: psc.countryOfResidence
-            },
-            {
-              label: "   Date of birth",
-              value: formatDateOfBirth(psc.dateOfBirth)
-            },
-            {
-              label: "   Address",
-              value: psc.address?.formatted ?? psc.principalOfficeAddress?.formatted ?? null
-            },
-            {
-              label: "   Natures of control",
-              value: formatList(psc.naturesOfControl)
-            }
-          ])
-        ]);
+      ? [colours.dim("No persons with significant control found.")]
+      : envelope.data.psc.map((psc) => {
+          const metadata = compactRowValues(
+            psc.kind,
+            psc.notifiedOn !== null ? `Notified ${psc.notifiedOn}` : null,
+            psc.ceasedOn !== null ? `Ceased ${psc.ceasedOn}` : null
+          );
+          const identityLine = compactRowValues(
+            psc.nationality,
+            psc.countryOfResidence,
+            formatDateOfBirth(psc.dateOfBirth)
+          );
 
-  return [...summaryLines, "", ...pscLines].join("\n");
+          return [
+            colours.bold(colours.bright(psc.name ?? psc.description ?? "Unknown PSC")),
+            ...(metadata !== null
+              ? renderWrappedText(metadata, context, { indent: 2, style: colours.dim })
+              : []),
+            ...(identityLine !== null
+              ? renderWrappedText(identityLine, context, { indent: 2, style: colours.dim })
+              : []),
+            ...renderWrappedText(
+              psc.address?.formatted ?? psc.principalOfficeAddress?.formatted ?? null,
+              context,
+              {
+                indent: 2,
+                style: colours.dim
+              }
+            ),
+            ...renderBulletedList(psc.naturesOfControl, context, {
+              bullet: "-",
+              indent: 2,
+              style: colours.dim
+            })
+          ].join("\n");
+        });
+
+  return [summaryLines.join("\n"), ...pscBlocks]
+    .filter((block) => block.length > 0)
+    .join("\n\n");
 };
 
 export const registerPscCommand = (

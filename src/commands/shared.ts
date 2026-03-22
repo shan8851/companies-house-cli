@@ -9,6 +9,7 @@ import { resolveCliConfig } from "../lib/config.js";
 import { CliHandledError, toCliError } from "../lib/errors.js";
 import type {
   CommandEnvelope,
+  HumanRenderContext,
   ListCommandOptions,
   OutputMode,
   RuntimeDependencies
@@ -18,6 +19,8 @@ export const createDefaultRuntimeDependencies = (): RuntimeDependencies => ({
   cwd: process.cwd(),
   env: process.env,
   fetchImplementation: fetch,
+  stdoutColumns: process.stdout.columns,
+  stdoutIsTTY: process.stdout.isTTY,
   writeStderr: (text) => {
     process.stderr.write(text);
   },
@@ -76,6 +79,29 @@ export const resolveOutputMode = (command: Command): OutputMode => {
   return globalOptions.json ? "json" : "human";
 };
 
+const DEFAULT_TERMINAL_WIDTH = 80;
+
+const resolveHumanRenderContext = (
+  command: Command,
+  dependencies: RuntimeDependencies
+): HumanRenderContext => {
+  const globalOptions = command.optsWithGlobals<{
+    color?: boolean;
+  }>();
+  const stdoutIsTTY = dependencies.stdoutIsTTY ?? false;
+  const colorDisabledByFlag = globalOptions.color === false;
+  const colorDisabledByEnv = "NO_COLOR" in dependencies.env;
+  const terminalWidth =
+    typeof dependencies.stdoutColumns === "number" && dependencies.stdoutColumns > 0
+      ? dependencies.stdoutColumns
+      : DEFAULT_TERMINAL_WIDTH;
+
+  return {
+    ansiEnabled: stdoutIsTTY && !colorDisabledByFlag && !colorDisabledByEnv,
+    terminalWidth
+  };
+};
+
 export interface CommandExecutionContext {
   client: CompaniesHouseClient;
 }
@@ -85,7 +111,10 @@ export interface ExecuteCommandOptions<TInput, TData> {
   commandName: string;
   dependencies: RuntimeDependencies;
   execute: (context: CommandExecutionContext) => Promise<CommandEnvelope<TInput, TData>>;
-  renderHuman: (envelope: CommandEnvelope<TInput, TData>) => string;
+  renderHuman: (
+    envelope: CommandEnvelope<TInput, TData>,
+    context: HumanRenderContext
+  ) => string;
 }
 
 export const executeCommand = async <TInput, TData>({
@@ -115,7 +144,7 @@ export const executeCommand = async <TInput, TData>({
       return;
     }
 
-    dependencies.writeStdout(`${renderHuman(envelope)}\n`);
+    dependencies.writeStdout(`${renderHuman(envelope, resolveHumanRenderContext(command, dependencies))}\n`);
   } catch (error) {
     const cliError = toCliError(error);
 

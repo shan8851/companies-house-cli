@@ -18,6 +18,7 @@ export const createProgram = (dependencies: RuntimeDependencies): Command => {
     .description("Agent-friendly UK Companies House CLI.")
     .version("0.1.0")
     .option("--json", "Emit normalized JSON output.")
+    .option("--no-color", "Disable ANSI colour and styling in human output.")
     .showHelpAfterError()
     .showSuggestionAfterError()
     .configureOutput({

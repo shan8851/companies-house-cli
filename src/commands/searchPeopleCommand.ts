@@ -1,9 +1,12 @@
 import type { Command } from "commander";
 
+import { createColours } from "../lib/colours.js";
 import {
+  compactRowValues,
   formatDateOfBirth,
-  renderKeyValueRows,
-  renderPaginationSummary
+  renderPaginationSummary,
+  renderWrappedText,
+  withFallback
 } from "../lib/formatting.js";
 import {
   extractOfficerId,
@@ -17,8 +20,8 @@ import type {
   OfficerSearchApiItem,
   OfficerSearchApiResponse
 } from "../types/api.js";
+import type { HumanRenderContext, RuntimeDependencies } from "../types/cli.js";
 import type { SearchPeopleEnvelope } from "../types/normalized.js";
-import type { RuntimeDependencies } from "../types/cli.js";
 import {
   addListOptions,
   executeCommand,
@@ -35,59 +38,82 @@ interface SearchPeopleCommandOptions {
   startIndex?: number;
 }
 
-const renderSearchPeopleHuman = (envelope: SearchPeopleEnvelope): string => {
-  const summary = renderPaginationSummary(
-    envelope.data.results.length,
-    envelope.data.totalSearchHits,
-    envelope.pagination?.fetchedAll ?? false
+const renderSearchPeopleHuman = (
+  envelope: SearchPeopleEnvelope,
+  context: HumanRenderContext
+): string => {
+  const colours = createColours(context.ansiEnabled);
+  const summary = colours.dim(
+    renderPaginationSummary(
+      envelope.data.results.length,
+      envelope.data.totalSearchHits,
+      envelope.pagination?.fetchedAll ?? false
+    )
   );
-
-  const resultLines =
+  const resultBlocks =
     envelope.data.results.length === 0
-      ? ["No matching people found."]
-      : envelope.data.results.flatMap((result, index) => {
+      ? [colours.dim("No matching people found.")]
+      : envelope.data.results.map((result) => {
+          const metadata = compactRowValues(
+            result.officerId !== null ? `Officer ID ${result.officerId}` : null,
+            formatDateOfBirth(result.dateOfBirth)
+          );
+          const appointmentCountLabel =
+            result.appointmentCount !== null
+              ? `${result.appointmentCount} appointments`
+              : "appointments unknown";
           const appointmentLines =
             result.appointments.length === 0
-              ? ["   Appointments: none found"]
-              : result.appointments.map(
-                  (appointment, appointmentIndex) =>
-                    `   Appointment ${appointmentIndex + 1}: ${
-                      appointment.companyName ?? "Unknown company"
-                    } (${appointment.companyNumber ?? "unknown"}) | ${
-                      appointment.officerRole ?? "role unknown"
-                    } | appointed ${appointment.appointedOn ?? "unknown"}`
-                );
+              ? [colours.dim("  No appointments found.")]
+              : result.appointments.flatMap((appointment) => {
+                  const appointmentHeader = [
+                    colours.bold(
+                      colours.bright(withFallback(appointment.companyName, "Unknown company"))
+                    ),
+                    colours.dim(`(${withFallback(appointment.officerRole, "role unknown")})`),
+                    colours.cyan(`(${withFallback(appointment.companyNumber, "unknown")})`)
+                  ].join(" ");
+                  const appointmentMetadata = compactRowValues(
+                    appointment.appointedOn !== null
+                      ? `Appointed ${appointment.appointedOn}`
+                      : null,
+                    appointment.resignedOn !== null
+                      ? `Resigned ${appointment.resignedOn}`
+                      : null
+                  );
+
+                  return [
+                    `  ${appointmentHeader}`,
+                    ...(appointmentMetadata !== null
+                      ? renderWrappedText(appointmentMetadata, context, {
+                          indent: 4,
+                          style: colours.dim
+                        })
+                      : [])
+                  ];
+                });
 
           return [
-            `${index + 1}. ${result.name ?? "Unknown person"}`,
-            ...renderKeyValueRows([
-              {
-                label: "   Officer ID",
-                value: result.officerId
-              },
-              {
-                label: "   Date of birth",
-                value: formatDateOfBirth(result.dateOfBirth)
-              },
-              {
-                label: "   Appointment count",
-                value:
-                  result.appointmentCount !== null ? String(result.appointmentCount) : null
-              },
-              {
-                label: "   Address",
-                value: result.address?.formatted ?? null
-              },
-              {
-                label: "   Description",
-                value: result.description
-              }
-            ]),
+            [
+              colours.bold(colours.bright(withFallback(result.name, "Unknown person"))),
+              colours.cyan(`(${appointmentCountLabel})`)
+            ].join(" "),
+            ...(metadata !== null
+              ? renderWrappedText(metadata, context, { indent: 2, style: colours.dim })
+              : []),
+            ...renderWrappedText(result.address?.formatted ?? null, context, {
+              indent: 2,
+              style: colours.dim
+            }),
+            ...renderWrappedText(result.description, context, {
+              indent: 2,
+              style: colours.dim
+            }),
             ...appointmentLines
-          ];
+          ].join("\n");
         });
 
-  return [summary, ...resultLines].join("\n");
+  return [summary, ...resultBlocks].join("\n\n");
 };
 
 export const registerSearchPeopleCommand = (

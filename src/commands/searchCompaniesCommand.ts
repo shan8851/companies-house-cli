@@ -1,9 +1,17 @@
 import type { Command } from "commander";
 
-import { renderPaginationSummary, renderKeyValueRows } from "../lib/formatting.js";
+import { createColours } from "../lib/colours.js";
 import { normalizeCompanySearchResult } from "../lib/normalizers.js";
 import { fetchPaginatedItems } from "../lib/pagination.js";
+import {
+  compactRowValues,
+  humanizeEnumValue,
+  renderPaginationSummary,
+  renderWrappedText,
+  withFallback
+} from "../lib/formatting.js";
 import type { CompanySearchApiItem, CompanySearchApiResponse } from "../types/api.js";
+import type { HumanRenderContext } from "../types/cli.js";
 import type { SearchCompaniesEnvelope } from "../types/normalized.js";
 import type { RuntimeDependencies } from "../types/cli.js";
 import {
@@ -19,45 +27,72 @@ interface SearchCompaniesCommandOptions {
   startIndex?: number;
 }
 
-const renderSearchCompaniesHuman = (envelope: SearchCompaniesEnvelope): string => {
-  const companyLines =
+const formatCompanyStatus = (
+  companyStatus: string | null,
+  context: HumanRenderContext
+): string | null => {
+  if (companyStatus === null) {
+    return null;
+  }
+
+  const colours = createColours(context.ansiEnabled);
+  const formattedStatus = humanizeEnumValue(companyStatus);
+
+  if (companyStatus === "active") {
+    return colours.accentGreen(formattedStatus);
+  }
+
+  if (companyStatus === "dissolved") {
+    return colours.dangerRed(formattedStatus);
+  }
+
+  return colours.amber(formattedStatus);
+};
+
+const renderSearchCompaniesHuman = (
+  envelope: SearchCompaniesEnvelope,
+  context: HumanRenderContext
+): string => {
+  const colours = createColours(context.ansiEnabled);
+  const companyBlocks =
     envelope.data.companies.length === 0
-      ? ["No companies found."]
-      : envelope.data.companies.flatMap((company, index) => [
-          `${index + 1}. ${company.name ?? "Unknown company"} (${company.companyNumber ?? "unknown"})`,
-          ...renderKeyValueRows([
-            {
-              label: "   Status",
-              value: company.companyStatus
-            },
-            {
-              label: "   Type",
-              value: company.companyType
-            },
-            {
-              label: "   Created",
-              value: company.dateOfCreation
-            },
-            {
-              label: "   Address",
-              value: company.address?.formatted ?? null
-            },
-            {
-              label: "   Description",
-              value: company.description
-            }
-          ])
-        ]);
+      ? [colours.dim("No companies found.")]
+      : envelope.data.companies.map((company) => {
+          const heading = [
+            colours.bold(colours.bright(withFallback(company.name, "Unknown company"))),
+            colours.cyan(`(${withFallback(company.companyNumber, "unknown")})`)
+          ].join(" ");
+          const metadata = compactRowValues(
+            company.companyType,
+            company.dateOfCreation !== null ? `Created ${company.dateOfCreation}` : null
+          );
+          const detailLines = [
+            formatCompanyStatus(company.companyStatus, context),
+            ...(metadata !== null ? renderWrappedText(metadata, context, { style: colours.dim }) : []),
+            ...renderWrappedText(company.address?.formatted ?? null, context, {
+              style: colours.dim
+            }),
+            ...renderWrappedText(company.description, context, {
+              style: colours.dim
+            })
+          ].filter((line): line is string => line !== null);
+
+          return [heading, ...detailLines].join("\n");
+        });
 
   const summary = envelope.pagination
-    ? renderPaginationSummary(
-        envelope.pagination.returnedCount,
-        envelope.pagination.totalResults,
-        envelope.pagination.fetchedAll
+    ? colours.dim(
+        renderPaginationSummary(
+          envelope.pagination.returnedCount,
+          envelope.pagination.totalResults,
+          envelope.pagination.fetchedAll
+        )
       )
     : null;
 
-  return [summary, ...companyLines].filter((line): line is string => line !== null).join("\n");
+  return [summary, ...companyBlocks]
+    .filter((line): line is string => line !== null)
+    .join("\n\n");
 };
 
 export const registerSearchCompaniesCommand = (

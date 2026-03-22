@@ -60,6 +60,10 @@ Company numbers are automatically zero-padded — `9215862` becomes `09215862`.
 
 All list commands support `--items-per-page`, `--start-index`, and `--all` for pagination.
 
+Human-readable output uses ANSI styling when stdout is a TTY. Use `--no-color` or set
+`NO_COLOR` to disable styling explicitly. Styling is disabled automatically for non-TTY
+output.
+
 ## Agent Integration
 
 Add `--json` to any command for stable normalized output.
@@ -67,6 +71,7 @@ Add `--json` to any command for stable normalized output.
 ```bash
 ch search "Revolut" --json
 ch officers 09215862 --all --json | jq
+ch info 09215862 --no-color
 ```
 
 Every response uses a stable envelope:

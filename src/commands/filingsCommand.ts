@@ -1,12 +1,18 @@
 import { CommanderError, type Command } from "commander";
 
+import { createColours } from "../lib/colours.js";
 import { normalizeCompanyNumber } from "../lib/companyNumber.js";
-import { renderKeyValueRows, renderPaginationSummary } from "../lib/formatting.js";
+import {
+  compactRowValues,
+  renderPaginationSummary,
+  renderWrappedText,
+  withFallback
+} from "../lib/formatting.js";
 import { normalizeFiling } from "../lib/normalizers.js";
 import { fetchPaginatedItems } from "../lib/pagination.js";
 import type { FilingHistoryApiItem, FilingHistoryApiResponse } from "../types/api.js";
+import type { HumanRenderContext, RuntimeDependencies } from "../types/cli.js";
 import type { FilingsEnvelope } from "../types/normalized.js";
-import type { RuntimeDependencies } from "../types/cli.js";
 import {
   addListOptions,
   executeCommand,
@@ -34,51 +40,91 @@ const resolveCategoryFilter = (options: FilingsCommandOptions): string | undefin
   return options.category ?? options.type;
 };
 
-const renderFilingsHuman = (envelope: FilingsEnvelope): string => {
+const renderCategoryTag = (
+  category: string | null,
+  context: HumanRenderContext
+): string | null => {
+  if (category === null) {
+    return null;
+  }
+
+  const colours = createColours(context.ansiEnabled);
+  const tagLabel = `[${category}]`;
+
+  if (category === "accounts") {
+    return colours.cyan(tagLabel);
+  }
+
+  if (category === "confirmation-statement") {
+    return colours.accentGreen(tagLabel);
+  }
+
+  return tagLabel;
+};
+
+const renderFilingsHuman = (
+  envelope: FilingsEnvelope,
+  context: HumanRenderContext
+): string => {
+  const colours = createColours(context.ansiEnabled);
   const summary = envelope.pagination
-    ? renderPaginationSummary(
-        envelope.pagination.returnedCount,
-        envelope.pagination.totalResults,
-        envelope.pagination.fetchedAll
+    ? colours.dim(
+        renderPaginationSummary(
+          envelope.pagination.returnedCount,
+          envelope.pagination.totalResults,
+          envelope.pagination.fetchedAll
+        )
       )
     : null;
-
-  const filingLines =
+  const filingBlocks =
     envelope.data.filings.length === 0
-      ? ["No filings found."]
-      : envelope.data.filings.flatMap((filing, index) => [
-          `${index + 1}. ${filing.date ?? "unknown date"} | ${filing.type ?? "unknown type"} | ${
-            filing.description ?? "No description"
-          }`,
-          ...renderKeyValueRows([
-            {
-              label: "   Category",
-              value: filing.category
-            },
-            {
-              label: "   Subcategory",
-              value: filing.subcategory
-            },
-            {
-              label: "   Pages",
-              value: filing.pages !== null ? String(filing.pages) : null
-            },
-            {
-              label: "   Transaction",
-              value: filing.transactionId
-            },
-            {
-              label: "   Document metadata",
-              value: filing.documentMetadataUrl
-            },
-            {
-              label: "   Document download",
-              value: filing.documentContentUrl
-            }
-          ])
-        ]);
+      ? [colours.dim("No filings found.")]
+      : envelope.data.filings.map((filing) => {
+          const header = [
+            colours.dim(withFallback(filing.date, "unknown date")),
+            colours.bold(colours.bright(withFallback(filing.type, "unknown type"))),
+            renderCategoryTag(filing.category, context),
+            filing.pages !== null
+              ? colours.dim(`(${filing.pages} ${filing.pages === 1 ? "page" : "pages"})`)
+              : null
+          ]
+            .filter((value): value is string => value !== null)
+            .join(" ");
+          const metadata = compactRowValues(
+            filing.subcategory !== null ? `Subcategory ${filing.subcategory}` : null,
+            filing.transactionId !== null ? `Transaction ${filing.transactionId}` : null
+          );
 
-  return [summary, ...filingLines].filter((line): line is string => line !== null).join("\n");
+          return [
+            header,
+            ...renderWrappedText(filing.description, context, {
+              indent: 2,
+              style: colours.dim
+            }),
+            ...(metadata !== null
+              ? renderWrappedText(metadata, context, {
+                  indent: 2,
+                  style: colours.dim
+                })
+              : []),
+            ...(envelope.input.includeLinks
+              ? [
+                  ...renderWrappedText(filing.documentMetadataUrl, context, {
+                    indent: 2,
+                    style: (value: string) => colours.dim(colours.underline(value))
+                  }),
+                  ...renderWrappedText(filing.documentContentUrl, context, {
+                    indent: 2,
+                    style: (value: string) => colours.dim(colours.underline(value))
+                  })
+                ]
+              : [])
+          ].join("\n");
+        });
+
+  return [summary, ...filingBlocks]
+    .filter((line): line is string => line !== null)
+    .join("\n\n");
 };
 
 export const registerFilingsCommand = (

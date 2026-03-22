@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { realpathSync } from "node:fs";
+import { realpathSync } from 'node:fs';
 import { fileURLToPath } from "node:url";
 
 import { Command, CommanderError } from "commander";
@@ -14,11 +14,11 @@ export const createProgram = (dependencies: RuntimeDependencies): Command => {
   const program = new Command();
 
   program
-    .name("ch")
-    .description("Agent-friendly UK Companies House CLI.")
-    .version("0.1.0")
-    .option("--json", "Emit normalized JSON output.")
-    .option("--no-color", "Disable ANSI colour and styling in human output.")
+    .name('ch')
+    .description('Agent-friendly UK Companies House CLI.')
+    .version('0.2.1')
+    .option('--json', 'Emit normalized JSON output.')
+    .option('--no-color', 'Disable ANSI colour and styling in human output.')
     .showHelpAfterError()
     .showSuggestionAfterError()
     .configureOutput({
@@ -27,7 +27,7 @@ export const createProgram = (dependencies: RuntimeDependencies): Command => {
       },
       writeOut: (text) => {
         dependencies.writeStdout(text);
-      }
+      },
     })
     .exitOverride();
 

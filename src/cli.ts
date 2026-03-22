@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 
-import { realpathSync } from 'node:fs';
+import { realpathSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 import { Command, CommanderError } from "commander";
+
+const require = createRequire(import.meta.url);
+const packageJson = require("../package.json") as { version: string };
 
 import { registerCommands } from "./commands/index.js";
 import { CliHandledError } from "./lib/errors.js";
@@ -16,7 +20,7 @@ export const createProgram = (dependencies: RuntimeDependencies): Command => {
   program
     .name('ch')
     .description('Agent-friendly UK Companies House CLI.')
-    .version('0.2.1')
+    .version(packageJson.version)
     .option('--json', 'Emit normalized JSON output.')
     .option('--no-color', 'Disable ANSI colour and styling in human output.')
     .showHelpAfterError()

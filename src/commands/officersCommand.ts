@@ -28,6 +28,13 @@ interface OfficersCommandOptions {
   startIndex?: number;
 }
 
+const OFFICERS_HELP_EXAMPLES = [
+  "ch officers 09215862",
+  "ch officers 09215862 --all",
+  "ch officers 09215862 --items-per-page 50",
+  "ch officers 09215862 --json"
+].join("\n  ");
+
 const renderOfficerSummaryLine = (
   envelope: OfficersEnvelope,
   context: HumanRenderContext
@@ -130,6 +137,9 @@ export const registerOfficersCommand = (
       .option("--order-by <orderBy>", "Sort order to request from Companies House.")
       .option("--register-type <registerType>", "Register type filter.")
       .option("--register-view <registerView>", "Register view filter.")
+      .option("--json", "Force JSON output.")
+      .option("--text", "Force text output.")
+      .addHelpText("after", `\nExamples:\n  ${OFFICERS_HELP_EXAMPLES}`)
   ).action(async (companyNumber: string, options: OfficersCommandOptions, command: Command) => {
     const normalizedCompanyNumber = normalizeCompanyNumber(companyNumber);
 

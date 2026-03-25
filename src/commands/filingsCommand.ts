@@ -1,4 +1,4 @@
-import { CommanderError, type Command } from "commander";
+import type { Command } from "commander";
 
 import { createColours } from "../lib/colours.js";
 import { normalizeCompanyNumber } from "../lib/companyNumber.js";
@@ -10,6 +10,7 @@ import {
 } from "../lib/formatting.js";
 import { normalizeFiling } from "../lib/normalizers.js";
 import { fetchPaginatedItems } from "../lib/pagination.js";
+import { createCliError } from "../lib/errors.js";
 import type { FilingHistoryApiItem, FilingHistoryApiResponse } from "../types/api.js";
 import type { HumanRenderContext, RuntimeDependencies } from "../types/cli.js";
 import type { FilingsEnvelope } from "../types/normalized.js";
@@ -28,11 +29,17 @@ interface FilingsCommandOptions {
   type?: string;
 }
 
+const FILINGS_HELP_EXAMPLES = [
+  "ch filings 09215862",
+  "ch filings 09215862 --type accounts",
+  "ch filings 09215862 --type accounts --include-links",
+  "ch filings 09215862 --all"
+].join("\n  ");
+
 const resolveCategoryFilter = (options: FilingsCommandOptions): string | undefined => {
   if (options.category && options.type && options.category !== options.type) {
-    throw new CommanderError(
-      1,
-      "command.invalidOption",
+    throw createCliError(
+      "INVALID_INPUT",
       "--category and --type must match when both are provided."
     );
   }
@@ -141,6 +148,9 @@ export const registerFilingsCommand = (
         "Include direct document content URLs derived from Companies House document metadata links."
       )
       .option("--type <category>", "Alias for --category.")
+      .option("--json", "Force JSON output.")
+      .option("--text", "Force text output.")
+      .addHelpText("after", `\nExamples:\n  ${FILINGS_HELP_EXAMPLES}`)
   ).action(async (companyNumber: string, options: FilingsCommandOptions, command: Command) => {
     const normalizedCompanyNumber = normalizeCompanyNumber(companyNumber);
 

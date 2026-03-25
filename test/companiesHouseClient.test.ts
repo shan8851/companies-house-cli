@@ -1,12 +1,18 @@
+import { createRequire } from "node:module";
+
 import { describe, expect, it } from "vitest";
 
 import { createCompaniesHouseClient } from "../src/lib/companiesHouseClient.js";
 import type { CompaniesHouseCliError } from "../src/lib/errors.js";
 
+const require = createRequire(import.meta.url);
+const packageJson = require("../package.json") as { version: string };
+
 describe("createCompaniesHouseClient", () => {
   it("sends basic auth and query parameters", async () => {
     const requestCapture: {
       authorizationHeader?: string | null;
+      userAgentHeader?: string | null;
       requestedUrl?: URL;
     } = {};
 
@@ -21,6 +27,7 @@ describe("createCompaniesHouseClient", () => {
               ? new URL(input.url)
               : new URL(String(input));
         requestCapture.authorizationHeader = new Headers(init?.headers).get("Authorization");
+        requestCapture.userAgentHeader = new Headers(init?.headers).get("User-Agent");
 
         return Promise.resolve(
           new Response(
@@ -62,6 +69,9 @@ describe("createCompaniesHouseClient", () => {
     expect(requestCapture.authorizationHeader).toBe(
       `Basic ${Buffer.from("secret-api-key:").toString("base64")}`
     );
+    expect(requestCapture.userAgentHeader).toBe(
+      `companies-house-cli/${packageJson.version}`
+    );
   });
 
   it("returns null for insolvency when Companies House responds with 404", async () => {
@@ -101,8 +111,13 @@ describe("createCompaniesHouseClient", () => {
 
     await expect(client.getCompanyProfile("12345678")).rejects.toEqual(
       expect.objectContaining<Partial<CompaniesHouseCliError>>({
-        code: "unauthorized",
-        statusCode: 401
+        code: "AUTH_ERROR",
+        details: {
+          statusCode: 401,
+          url: "https://api.company-information.service.gov.uk/company/12345678"
+        },
+        exitCode: 3,
+        retryable: false
       })
     );
   });

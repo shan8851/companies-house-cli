@@ -8,6 +8,11 @@ import type { HumanRenderContext, RuntimeDependencies } from "../types/cli.js";
 import type { InsolvencyEnvelope } from "../types/normalized.js";
 import { executeCommand } from "./shared.js";
 
+const INSOLVENCY_HELP_EXAMPLES = [
+  "ch insolvency 09215862",
+  "ch insolvency 09215862 --json"
+].join("\n  ");
+
 const renderInsolvencyHuman = (
   envelope: InsolvencyEnvelope,
   context: HumanRenderContext
@@ -84,6 +89,9 @@ export const registerInsolvencyCommand = (
   program
     .command("insolvency <companyNumber>")
     .description("Show insolvency information for a company.")
+    .option("--json", "Force JSON output.")
+    .option("--text", "Force text output.")
+    .addHelpText("after", `\nExamples:\n  ${INSOLVENCY_HELP_EXAMPLES}`)
     .action(async (companyNumber: string, _options: object, command: Command) => {
       const normalizedCompanyNumber = normalizeCompanyNumber(companyNumber);
 

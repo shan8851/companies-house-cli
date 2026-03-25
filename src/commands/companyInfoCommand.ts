@@ -16,6 +16,12 @@ import { executeCommand } from "./shared.js";
 
 const identity = (value: string): string => value;
 
+const INFO_HELP_EXAMPLES = [
+  "ch info 09215862",
+  "ch info 09215862 --json",
+  "ch info 09215862 --text"
+].join("\n  ");
+
 const renderCompanyStatus = (
   companyStatus: string | null,
   context: HumanRenderContext
@@ -240,6 +246,9 @@ export const registerCompanyInfoCommand = (
   program
     .command("info <companyNumber>")
     .description("Get the company profile for a company number.")
+    .option("--json", "Force JSON output.")
+    .option("--text", "Force text output.")
+    .addHelpText("after", `\nExamples:\n  ${INFO_HELP_EXAMPLES}`)
     .action(async (companyNumber: string, _options: object, command: Command) => {
       const normalizedCompanyNumber = normalizeCompanyNumber(companyNumber);
 

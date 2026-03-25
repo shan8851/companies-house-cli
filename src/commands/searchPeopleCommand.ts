@@ -31,6 +31,13 @@ import {
 
 const DEFAULT_MATCH_LIMIT = 10;
 
+const SEARCH_PERSON_HELP_EXAMPLES = [
+  'ch search-person "Nik Storonsky"',
+  'ch search-person "Nik Storonsky" --match-limit 5',
+  'ch search-person "Nik Storonsky" --items-per-page 20',
+  'ch search-person "Nik Storonsky" --json'
+].join("\n  ");
+
 interface SearchPeopleCommandOptions {
   all?: boolean;
   itemsPerPage?: number;
@@ -130,6 +137,9 @@ export const registerSearchPeopleCommand = (
         parsePositiveInteger,
         DEFAULT_MATCH_LIMIT
       )
+      .option("--json", "Force JSON output.")
+      .option("--text", "Force text output.")
+      .addHelpText("after", `\nExamples:\n  ${SEARCH_PERSON_HELP_EXAMPLES}`)
   ).action(async (query: string, options: SearchPeopleCommandOptions, command: Command) => {
     await executeCommand({
       command,

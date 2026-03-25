@@ -66,26 +66,74 @@ output.
 
 ## Agent Integration
 
-Add `--json` to any command for stable normalized output.
+The CLI now defaults to **text in a TTY** and **JSON when piped**.
 
 ```bash
-ch search "Revolut" --json
+ch search "Revolut" | jq                # JSON when piped by default
+ch search "Revolut" --json              # Explicit JSON
+ch info 09215862 --text                 # Explicit text
 ch officers 09215862 --all --json | jq
-ch info 09215862 --no-color
+ch --json info 09215862                 # Compatibility alias still supported
 ```
 
-Every response uses a stable envelope:
+Canonical usage going forward is subcommand-local `--json` / `--text`, but root-level
+`ch --json ...` and `ch --text ...` each remain supported as a compatibility alias.
+
+Every successful JSON response now uses the aligned envelope:
 
 ```json
 {
+  "ok": true,
+  "schemaVersion": "1",
   "command": "officers",
-  "input": { "companyNumber": "09215862" },
-  "pagination": { "startIndex": 0, "itemsPerPage": 10, "totalResults": 12 },
-  "data": { "officers": [...] }
+  "requestedAt": "2026-03-25T17:00:00.000Z",
+  "data": {
+    "input": { "companyNumber": "09215862" },
+    "pagination": {
+      "startIndex": 0,
+      "itemsPerPage": 10,
+      "returnedCount": 10,
+      "totalResults": 12,
+      "fetchedAll": false
+    },
+    "officers": [...]
+  }
 }
 ```
 
+Errors use the same top-level contract and are written to **stdout** in JSON mode:
+
+```json
+{
+  "ok": false,
+  "schemaVersion": "1",
+  "command": "search",
+  "requestedAt": "2026-03-25T17:00:00.000Z",
+  "error": {
+    "code": "INVALID_INPUT",
+    "message": "Expected a positive integer.",
+    "retryable": false
+  }
+}
+```
+
+Exit codes are explicit:
+
+- `0` success
+- `2` bad input or not found
+- `3` auth, upstream, or rate-limit failures
+- `4` internal unexpected failures
+
 Works with [OpenClaw](https://github.com/openclaw/openclaw), Claude Desktop MCP, or any agent that can shell out.
+
+## Migration Note
+
+The JSON output contract changed in this release to align with `rail-cli` and `tfl-cli`.
+
+Previous releases returned command metadata like `input` and `pagination` at the top level.
+They now live under `data.input` and `data.pagination`.
+
+If you parse `ch` JSON programmatically, update consumers accordingly.
 
 ## Examples
 
@@ -107,6 +155,65 @@ $ ch filings 09215862 --type accounts --include-links
 2024-12-15  Full accounts  accounts  [PDF: https://...]
 2023-12-14  Full accounts  accounts  [PDF: https://...]
 ...
+
+# Agent-friendly JSON when piped
+$ ch search "Revolut" | jq
+{
+  "ok": true,
+  "schemaVersion": "1",
+  "command": "search",
+  "requestedAt": "2026-03-25T17:00:00.000Z",
+  "data": {
+    "input": {
+      "query": "Revolut",
+      "restrictions": null
+    },
+    "pagination": {
+      "fetchedAll": false,
+      "itemsPerPage": 10,
+      "returnedCount": 2,
+      "startIndex": 0,
+      "totalResults": 2
+    },
+    "companies": [
+      {
+        "companyNumber": "08804411",
+        "name": "REVOLUT LTD"
+      }
+    ]
+  }
+}
+
+# Explicit JSON for a non-paginated command
+$ ch info 09215862 --json
+{
+  "ok": true,
+  "schemaVersion": "1",
+  "command": "info",
+  "requestedAt": "2026-03-25T17:00:00.000Z",
+  "data": {
+    "input": {
+      "companyNumber": "09215862"
+    },
+    "company": {
+      "companyName": "REVOLUT LTD"
+    }
+  }
+}
+
+# Structured JSON error on stdout
+$ ch search "Revolut" --items-per-page foo --json
+{
+  "ok": false,
+  "schemaVersion": "1",
+  "command": "search",
+  "requestedAt": "2026-03-25T17:00:00.000Z",
+  "error": {
+    "code": "INVALID_INPUT",
+    "message": "Expected a positive integer.",
+    "retryable": false
+  }
+}
 
 # Find someone across all UK companies
 $ ch search-person "Tim Cook"

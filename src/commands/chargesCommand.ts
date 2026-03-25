@@ -27,6 +27,13 @@ interface ChargesCommandOptions {
   startIndex?: number;
 }
 
+const CHARGES_HELP_EXAMPLES = [
+  "ch charges 09215862",
+  "ch charges 09215862 --all",
+  "ch charges 09215862 --items-per-page 50",
+  "ch charges 09215862 --json"
+].join("\n  ");
+
 const renderChargeStatus = (
   chargeStatus: string | null,
   context: HumanRenderContext
@@ -125,7 +132,12 @@ export const registerChargesCommand = (
   dependencies: RuntimeDependencies
 ): void => {
   addListOptions(
-    program.command("charges <companyNumber>").description("List company charges.")
+    program
+      .command("charges <companyNumber>")
+      .description("List company charges.")
+      .option("--json", "Force JSON output.")
+      .option("--text", "Force text output.")
+      .addHelpText("after", `\nExamples:\n  ${CHARGES_HELP_EXAMPLES}`)
   ).action(async (companyNumber: string, options: ChargesCommandOptions, command: Command) => {
     const normalizedCompanyNumber = normalizeCompanyNumber(companyNumber);
 

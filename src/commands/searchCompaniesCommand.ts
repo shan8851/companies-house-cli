@@ -27,6 +27,13 @@ interface SearchCompaniesCommandOptions {
   startIndex?: number;
 }
 
+const SEARCH_HELP_EXAMPLES = [
+  'ch search "Revolut"',
+  'ch search "Revolut" --items-per-page 5',
+  'ch search "Revolut" --start-index 20',
+  'ch search "Revolut" --json'
+].join("\n  ");
+
 const formatCompanyStatus = (
   companyStatus: string | null,
   context: HumanRenderContext
@@ -107,6 +114,9 @@ export const registerSearchCompaniesCommand = (
         "--restrictions <restrictions>",
         "Search restrictions to pass through to Companies House."
       )
+      .option("--json", "Force JSON output.")
+      .option("--text", "Force text output.")
+      .addHelpText("after", `\nExamples:\n  ${SEARCH_HELP_EXAMPLES}`)
   ).action(async (query: string, options: SearchCompaniesCommandOptions, command: Command) => {
     await executeCommand({
       command,

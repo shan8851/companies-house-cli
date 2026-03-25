@@ -21,7 +21,7 @@ const createHumanRuntimeDependencies = (
   });
 
 describe("runCli", () => {
-  it("renders normalized JSON for company search", async () => {
+  it("defaults to JSON when stdout is not a TTY", async () => {
     const io = {
       stderr: "",
       stdout: ""
@@ -54,13 +54,25 @@ describe("runCli", () => {
     ]);
 
     const exitCode = await runCli(
-      ["--json", "search", "Acme"],
+      ["search", "Acme"],
       createTestRuntimeDependencies(fetchImplementation, io)
     );
 
     const output = JSON.parse(io.stdout) as {
       command: string;
+      ok: boolean;
+      requestedAt: string;
+      schemaVersion: string;
       data: {
+        input: {
+          query: string;
+          restrictions: string | null;
+        };
+        pagination: {
+          fetchedAll: boolean;
+          returnedCount: number;
+          totalResults: number | null;
+        };
         companies: Array<{
           companyNumber: string;
           name: string;
@@ -69,7 +81,21 @@ describe("runCli", () => {
     };
 
     expect(exitCode).toBe(0);
+    expect(output.ok).toBe(true);
+    expect(output.schemaVersion).toBe("1");
     expect(output.command).toBe("search");
+    expect(output.requestedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(output.data.input).toEqual({
+      query: "Acme",
+      restrictions: null
+    });
+    expect(output.data.pagination).toEqual(
+      expect.objectContaining({
+        fetchedAll: false,
+        returnedCount: 1,
+        totalResults: 1
+      })
+    );
     expect(output.data.companies[0]).toEqual(
       expect.objectContaining({
         companyNumber: "12345678",
@@ -106,12 +132,16 @@ describe("runCli", () => {
     ]);
 
     const exitCode = await runCli(
-      ["--json", "info", "12345678"],
+      ["info", "12345678", "--json"],
       createTestRuntimeDependencies(fetchImplementation, io)
     );
 
     const output = JSON.parse(io.stdout) as {
+      ok: boolean;
       data: {
+        input: {
+          companyNumber: string;
+        };
         company: {
           companyName: string;
           hasCharges: boolean;
@@ -120,11 +150,14 @@ describe("runCli", () => {
     };
 
     expect(exitCode).toBe(0);
+    expect(output.ok).toBe(true);
+    expect(output.data.input.companyNumber).toBe("12345678");
     expect(output.data.company.companyName).toBe("ACME LTD");
     expect(output.data.company.hasCharges).toBe(true);
+    expect(output.data).not.toHaveProperty("pagination");
   });
 
-  it("renders normalized JSON for officers", async () => {
+  it("forces JSON output in TTY mode with --json", async () => {
     const io = {
       stderr: "",
       stdout: ""
@@ -150,12 +183,18 @@ describe("runCli", () => {
     ]);
 
     const exitCode = await runCli(
-      ["--json", "officers", "12345678"],
-      createTestRuntimeDependencies(fetchImplementation, io)
+      ["officers", "12345678", "--json"],
+      createHumanRuntimeDependencies(fetchImplementation, io)
     );
 
     const output = JSON.parse(io.stdout) as {
       data: {
+        input: {
+          companyNumber: string;
+        };
+        pagination: {
+          totalResults: number | null;
+        };
         officers: Array<{
           name: string;
           officerRole: string;
@@ -167,8 +206,77 @@ describe("runCli", () => {
     };
 
     expect(exitCode).toBe(0);
+    expect(output.data.input.companyNumber).toBe("12345678");
+    expect(output.data.pagination.totalResults).toBe(1);
     expect(output.data.summary.activeCount).toBe(1);
     expect(output.data.officers[0]?.officerRole).toBe("director");
+    expect(io.stderr).toBe("");
+  });
+
+  it("keeps root-level --json as a compatibility alias", async () => {
+    const io = {
+      stderr: "",
+      stdout: ""
+    };
+    const fetchImplementation = createQueuedFetch([
+      {
+        body: {
+          company_name: "ACME LTD",
+          company_number: "12345678",
+          company_status: "active",
+          type: "ltd"
+        }
+      }
+    ]);
+
+    const exitCode = await runCli(
+      ["--json", "info", "12345678"],
+      createTestRuntimeDependencies(fetchImplementation, io)
+    );
+
+    const output = JSON.parse(io.stdout) as {
+      data: {
+        input: {
+          companyNumber: string;
+        };
+      };
+    };
+
+    expect(exitCode).toBe(0);
+    expect(output.data.input.companyNumber).toBe("12345678");
+  });
+
+  it("keeps root-level --text as a compatibility alias", async () => {
+    const io = {
+      stderr: "",
+      stdout: ""
+    };
+    const fetchImplementation = createQueuedFetch([
+      {
+        body: {
+          items: [
+            {
+              company_number: "12345678",
+              company_status: "active",
+              title: "ACME LTD"
+            }
+          ],
+          total_results: 1
+        }
+      }
+    ]);
+
+    const exitCode = await runCli(
+      ["--text", "search", "Acme"],
+      createTestRuntimeDependencies(fetchImplementation, io, {
+        stdoutColumns: 80,
+        stdoutIsTTY: false
+      })
+    );
+
+    expect(exitCode).toBe(0);
+    expect(io.stdout.trim()).not.toMatch(/^\{/);
+    expect(io.stdout).toContain("ACME LTD (12345678)");
   });
 
   it("uses --type as an alias for filing category", async () => {
@@ -202,10 +310,10 @@ describe("runCli", () => {
     );
 
     const output = JSON.parse(io.stdout) as {
-      input: {
-        category: string;
-      };
       data: {
+        input: {
+          category: string;
+        };
         filings: Array<{
           category: string;
         }>;
@@ -213,7 +321,7 @@ describe("runCli", () => {
     };
 
     expect(exitCode).toBe(0);
-    expect(output.input.category).toBe("accounts");
+    expect(output.data.input.category).toBe("accounts");
     expect(output.data.filings[0]?.category).toBe("accounts");
   });
 
@@ -250,17 +358,17 @@ describe("runCli", () => {
 
     const output = JSON.parse(io.stdout) as {
       data: {
+        input: {
+          includeLinks: boolean;
+        };
         filings: Array<{
           documentContentUrl: string | null;
         }>;
       };
-      input: {
-        includeLinks: boolean;
-      };
     };
 
     expect(exitCode).toBe(0);
-    expect(output.input.includeLinks).toBe(true);
+    expect(output.data.input.includeLinks).toBe(true);
     expect(output.data.filings[0]?.documentContentUrl).toBe(
       "https://document-api.company-information.service.gov.uk/document/abc123/content"
     );
@@ -443,13 +551,15 @@ describe("runCli", () => {
     );
 
     const output = JSON.parse(io.stdout) as {
-      input: {
-        companyNumber: string;
+      data: {
+        input: {
+          companyNumber: string;
+        };
       };
     };
 
     expect(exitCode).toBe(0);
-    expect(output.input.companyNumber).toBe("09215862");
+    expect(output.data.input.companyNumber).toBe("09215862");
   });
 
   it("treats missing insolvency records as an empty result", async () => {
@@ -528,30 +638,127 @@ describe("runCli", () => {
     );
 
     const output = JSON.parse(io.stdout) as {
-      pagination: {
-        fetchedAll: boolean;
-        returnedCount: number;
+      data: {
+        pagination: {
+          fetchedAll: boolean;
+          returnedCount: number;
+        };
       };
     };
 
     expect(exitCode).toBe(0);
-    expect(output.pagination.fetchedAll).toBe(true);
-    expect(output.pagination.returnedCount).toBe(2);
+    expect(output.data.pagination.fetchedAll).toBe(true);
+    expect(output.data.pagination.returnedCount).toBe(2);
   });
 
-  it("rejects --all with a non-zero --start-index", async () => {
+  it("returns structured JSON errors to stdout for handled invalid input", async () => {
     const io = {
       stderr: "",
       stdout: ""
     };
 
     const exitCode = await runCli(
-      ["search", "Acme", "--all", "--start-index", "1"],
+      ["search", "Acme", "--all", "--start-index", "1", "--json"],
       createTestRuntimeDependencies(createQueuedFetch([]), io)
     );
 
-    expect(exitCode).toBe(1);
-    expect(io.stderr).toContain("--all cannot be combined");
+    const output = JSON.parse(io.stdout) as {
+      command: string;
+      error: {
+        code: string;
+        message: string;
+        retryable: boolean;
+      };
+      ok: boolean;
+      schemaVersion: string;
+    };
+
+    expect(exitCode).toBe(2);
+    expect(output).toEqual(
+      expect.objectContaining({
+        command: "search",
+        ok: false,
+        schemaVersion: "1"
+      })
+    );
+    expect(output.error).toEqual(
+      expect.objectContaining({
+        code: "INVALID_INPUT",
+        message: "--all cannot be combined with a non-zero --start-index.",
+        retryable: false
+      })
+    );
+    expect(io.stderr).toBe("");
+  });
+
+  it("returns structured JSON errors for parse-time invalid input", async () => {
+    const io = {
+      stderr: "",
+      stdout: ""
+    };
+
+    const exitCode = await runCli(
+      ["search", "Acme", "--items-per-page", "foo", "--json"],
+      createTestRuntimeDependencies(createQueuedFetch([]), io)
+    );
+
+    const output = JSON.parse(io.stdout) as {
+      command: string;
+      error: {
+        code: string;
+        message: string;
+        retryable: boolean;
+      };
+      ok: boolean;
+    };
+
+    expect(exitCode).toBe(2);
+    expect(output).toEqual(
+      expect.objectContaining({
+        command: "search",
+        ok: false
+      })
+    );
+    expect(output.error).toEqual(
+      expect.objectContaining({
+        code: "INVALID_INPUT",
+        message: "Expected a positive integer.",
+        retryable: false
+      })
+    );
+    expect(io.stderr).toBe("");
+  });
+
+  it("rejects --json and --text together", async () => {
+    const io = {
+      stderr: "",
+      stdout: ""
+    };
+
+    const exitCode = await runCli(
+      ["search", "Acme", "--json", "--text"],
+      createTestRuntimeDependencies(createQueuedFetch([]), io)
+    );
+
+    const output = JSON.parse(io.stdout) as {
+      command: string;
+      error: {
+        code: string;
+        message: string;
+      };
+      ok: boolean;
+    };
+
+    expect(exitCode).toBe(2);
+    expect(output.command).toBe("search");
+    expect(output.ok).toBe(false);
+    expect(output.error).toEqual(
+      expect.objectContaining({
+        code: "INVALID_INPUT",
+        message: "Choose either --json or --text, not both."
+      })
+    );
+    expect(io.stderr).toBe("");
   });
 });
 
@@ -693,7 +900,7 @@ describe("runCli human output", () => {
     expect(io.stdout).not.toMatch(ANSI_PATTERN);
   });
 
-  it("disables ANSI styling automatically for non-TTY output", async () => {
+  it("forces text output in non-TTY mode with --text", async () => {
     const io = {
       stderr: "",
       stdout: ""
@@ -714,7 +921,7 @@ describe("runCli human output", () => {
     ]);
 
     const exitCode = await runCli(
-      ["search", "Acme"],
+      ["search", "Acme", "--text"],
       createTestRuntimeDependencies(fetchImplementation, io, {
         stdoutColumns: 80,
         stdoutIsTTY: false
@@ -723,6 +930,8 @@ describe("runCli human output", () => {
 
     expect(exitCode).toBe(0);
     expect(io.stdout).not.toMatch(ANSI_PATTERN);
+    expect(io.stdout.trim()).not.toMatch(/^\{/);
+    expect(io.stdout).toContain("ACME LTD (12345678)");
   });
 
   it("renders grouped company info sections in human output", async () => {
@@ -761,7 +970,7 @@ describe("runCli human output", () => {
     ]);
 
     const exitCode = await runCli(
-      ["info", "12345678"],
+      ["info", "12345678", "--text"],
       createTestRuntimeDependencies(fetchImplementation, io, {
         stdoutColumns: 80,
         stdoutIsTTY: false
@@ -846,7 +1055,7 @@ describe("runCli human output", () => {
     ]);
 
     const withoutLinksExitCode = await runCli(
-      ["filings", "12345678"],
+      ["filings", "12345678", "--text"],
       createTestRuntimeDependencies(fetchWithoutLinks, ioWithoutLinks, {
         stdoutColumns: 80,
         stdoutIsTTY: false
@@ -918,7 +1127,7 @@ describe("runCli human output", () => {
     ]);
 
     const exitCode = await runCli(
-      ["psc", "12345678"],
+      ["psc", "12345678", "--text"],
       createTestRuntimeDependencies(fetchImplementation, io, {
         stdoutColumns: 80,
         stdoutIsTTY: false
@@ -972,7 +1181,7 @@ describe("runCli human output", () => {
     ]);
 
     const exitCode = await runCli(
-      ["search-person", "Jane Director", "--match-limit", "1"],
+      ["search-person", "Jane Director", "--match-limit", "1", "--text"],
       createTestRuntimeDependencies(fetchImplementation, io, {
         stdoutColumns: 80,
         stdoutIsTTY: false
@@ -1013,7 +1222,7 @@ describe("runCli human output", () => {
     ]);
 
     const exitCode = await runCli(
-      ["charges", "12345678"],
+      ["charges", "12345678", "--text"],
       createTestRuntimeDependencies(fetchImplementation, io, {
         stdoutColumns: 40,
         stdoutIsTTY: false
@@ -1054,7 +1263,7 @@ describe("runCli human output", () => {
     ]);
 
     const exitCode = await runCli(
-      ["search", "Acme"],
+      ["search", "Acme", "--text"],
       createTestRuntimeDependencies(fetchImplementation, io, {
         stdoutColumns: 0,
         stdoutIsTTY: false
@@ -1102,7 +1311,7 @@ describe("runCli human output", () => {
     ]);
 
     const exitCode = await runCli(
-      ["insolvency", "12345678"],
+      ["insolvency", "12345678", "--text"],
       createTestRuntimeDependencies(fetchImplementation, io, {
         stdoutColumns: 80,
         stdoutIsTTY: false
@@ -1137,5 +1346,124 @@ describe("runCli human output", () => {
     expect(io.stderr).toBe("");
     expect(io.stdout).toMatch(ANSI_PATTERN);
     expect(stripAnsi(io.stdout).trim()).toBe("No insolvency history.");
+  });
+});
+
+describe("runCli help output", () => {
+  it("prints top-level help with output guidance and examples", async () => {
+    const io = {
+      stderr: "",
+      stdout: ""
+    };
+
+    const exitCode = await runCli(
+      ["--help"],
+      createTestRuntimeDependencies(createQueuedFetch([]), io)
+    );
+
+    expect(exitCode).toBe(0);
+    expect(io.stdout).toContain("Output defaults to text in a TTY and JSON when piped.");
+    expect(io.stdout).toContain("Examples:");
+    expect(io.stdout).toContain('ch search "Revolut"');
+    expect(io.stdout).toContain("ch info 09215862");
+    expect(io.stdout).toContain("ch officers 09215862 --all");
+    expect(io.stdout).toContain("ch filings 09215862 --type accounts --include-links");
+    expect(io.stdout).toContain("ch psc 09215862");
+    expect(io.stdout).toContain('ch search-person "Nik Storonsky"');
+    expect(io.stdout).toContain("ch charges 09215862");
+    expect(io.stdout).toContain("ch insolvency 09215862");
+    expect(io.stdout).toContain('ch search "Revolut" | jq');
+  });
+
+  it("prints exact example lines for every subcommand", async () => {
+    const helpCases = [
+      {
+        args: ["search", "--help"],
+        examples: [
+          'ch search "Revolut"',
+          'ch search "Revolut" --items-per-page 5',
+          'ch search "Revolut" --start-index 20',
+          'ch search "Revolut" --json'
+        ]
+      },
+      {
+        args: ["info", "--help"],
+        examples: [
+          "ch info 09215862",
+          "ch info 09215862 --json",
+          "ch info 09215862 --text"
+        ]
+      },
+      {
+        args: ["officers", "--help"],
+        examples: [
+          "ch officers 09215862",
+          "ch officers 09215862 --all",
+          "ch officers 09215862 --items-per-page 50",
+          "ch officers 09215862 --json"
+        ]
+      },
+      {
+        args: ["filings", "--help"],
+        examples: [
+          "ch filings 09215862",
+          "ch filings 09215862 --type accounts",
+          "ch filings 09215862 --type accounts --include-links",
+          "ch filings 09215862 --all"
+        ]
+      },
+      {
+        args: ["psc", "--help"],
+        examples: [
+          "ch psc 09215862",
+          "ch psc 09215862 --all",
+          "ch psc 09215862 --items-per-page 50",
+          "ch psc 09215862 --json"
+        ]
+      },
+      {
+        args: ["search-person", "--help"],
+        examples: [
+          'ch search-person "Nik Storonsky"',
+          'ch search-person "Nik Storonsky" --match-limit 5',
+          'ch search-person "Nik Storonsky" --items-per-page 20',
+          'ch search-person "Nik Storonsky" --json'
+        ]
+      },
+      {
+        args: ["charges", "--help"],
+        examples: [
+          "ch charges 09215862",
+          "ch charges 09215862 --all",
+          "ch charges 09215862 --items-per-page 50",
+          "ch charges 09215862 --json"
+        ]
+      },
+      {
+        args: ["insolvency", "--help"],
+        examples: [
+          "ch insolvency 09215862",
+          "ch insolvency 09215862 --json"
+        ]
+      }
+    ];
+
+    for (const helpCase of helpCases) {
+      const io = {
+        stderr: "",
+        stdout: ""
+      };
+
+      const exitCode = await runCli(
+        helpCase.args,
+        createTestRuntimeDependencies(createQueuedFetch([]), io)
+      );
+
+      expect(exitCode).toBe(0);
+      expect(io.stdout).toContain("Examples:");
+      helpCase.examples.forEach((example) => {
+        expect(io.stdout).toContain(example);
+      });
+    }
   });
 });

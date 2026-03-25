@@ -27,6 +27,13 @@ interface PscCommandOptions {
   startIndex?: number;
 }
 
+const PSC_HELP_EXAMPLES = [
+  "ch psc 09215862",
+  "ch psc 09215862 --all",
+  "ch psc 09215862 --items-per-page 50",
+  "ch psc 09215862 --json"
+].join("\n  ");
+
 const renderPscSummaryLine = (
   envelope: PscEnvelope,
   context: HumanRenderContext
@@ -117,6 +124,9 @@ export const registerPscCommand = (
       .command("psc <companyNumber>")
       .description("List persons with significant control for a company.")
       .option("--register-view <registerView>", "Register view filter.")
+      .option("--json", "Force JSON output.")
+      .option("--text", "Force text output.")
+      .addHelpText("after", `\nExamples:\n  ${PSC_HELP_EXAMPLES}`)
   ).action(async (companyNumber: string, options: PscCommandOptions, command: Command) => {
     const normalizedCompanyNumber = normalizeCompanyNumber(companyNumber);
 

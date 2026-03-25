@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { parse } from "dotenv";
 import { z } from "zod";
 
-import { CompaniesHouseCliError } from "./errors.js";
+import { createCliError } from "./errors.js";
 
 const configSchema = z.object({
   apiKey: z.string().trim().min(1)
@@ -47,9 +47,9 @@ export const resolveCliConfig = ({
   });
 
   if (!parsedConfig.success) {
-    throw new CompaniesHouseCliError(
+    throw createCliError(
+      "AUTH_ERROR",
       "Missing COMPANIES_HOUSE_API_KEY. Set it in your environment or add it to a local .env file.",
-      "missing_api_key"
     );
   }
 

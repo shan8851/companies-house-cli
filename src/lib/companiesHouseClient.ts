@@ -1,3 +1,5 @@
+import { createRequire } from "node:module";
+
 import type {
   ChargeListApiResponse,
   CompanyInsolvencyApiResponse,
@@ -9,9 +11,11 @@ import type {
   OfficerSearchApiResponse,
   PscListApiResponse
 } from "../types/api.js";
-import { CompaniesHouseCliError } from "./errors.js";
+import { createCliError } from "./errors.js";
 
-const USER_AGENT = "companies-house-cli/0.1.0";
+const require = createRequire(import.meta.url);
+const packageJson = require("../../package.json") as { version: string };
+const USER_AGENT = `companies-house-cli/${packageJson.version}`;
 
 type QueryValue = number | string | undefined;
 
@@ -96,28 +100,37 @@ const createApiError = (
   statusCode: number,
   url: string,
   responseBody: unknown
-): CompaniesHouseCliError => {
-  if (statusCode === 401) {
-    return new CompaniesHouseCliError(
+)=> {
+  if (statusCode === 401 || statusCode === 403) {
+    return createCliError(
+      "AUTH_ERROR",
       "Companies House rejected the request. Check that COMPANIES_HOUSE_API_KEY is valid for the public data API.",
-      "unauthorized",
-      statusCode
+      {
+        statusCode,
+        url
+      }
     );
   }
 
   if (statusCode === 404) {
-    return new CompaniesHouseCliError(
+    return createCliError(
+      "NOT_FOUND",
       "The requested Companies House resource was not found.",
-      "not_found",
-      statusCode
+      {
+        statusCode,
+        url
+      }
     );
   }
 
   if (statusCode === 429) {
-    return new CompaniesHouseCliError(
+    return createCliError(
+      "RATE_LIMITED",
       "Companies House rate-limited the request. Wait a moment and try again.",
-      "rate_limited",
-      statusCode
+      {
+        statusCode,
+        url
+      }
     );
   }
 
@@ -129,7 +142,10 @@ const createApiError = (
       ? responseBody.error
       : `Companies House returned HTTP ${statusCode} for ${url}.`;
 
-  return new CompaniesHouseCliError(message, "api_error", statusCode);
+  return createCliError("UPSTREAM_API_ERROR", message, {
+    statusCode,
+    url
+  });
 };
 
 export interface CompaniesHouseClient {
@@ -173,11 +189,19 @@ export const createCompaniesHouseClient = ({
         }
       });
     } catch (error) {
-      throw new CompaniesHouseCliError(
+      throw createCliError(
+        "UPSTREAM_API_ERROR",
         error instanceof Error
           ? `Failed to reach Companies House: ${error.message}`
           : "Failed to reach Companies House.",
-        "network_error"
+        error instanceof Error
+          ? {
+              reason: error.message,
+              url: url.toString()
+            }
+          : {
+              url: url.toString()
+            }
       );
     }
 
@@ -193,9 +217,12 @@ export const createCompaniesHouseClient = ({
     }
 
     if (typeof responseBody !== "object" || responseBody === null) {
-      throw new CompaniesHouseCliError(
+      throw createCliError(
+        "UPSTREAM_API_ERROR",
         `Companies House returned an invalid JSON payload for ${url.toString()}.`,
-        "invalid_response"
+        {
+          url: url.toString()
+        }
       );
     }
 

@@ -1,4 +1,3 @@
-import { CommanderError, InvalidArgumentError } from "commander";
 import type { Command } from "commander";
 
 import {
@@ -6,12 +5,17 @@ import {
   type CompaniesHouseClient
 } from "../lib/companiesHouseClient.js";
 import { resolveCliConfig } from "../lib/config.js";
-import { CliHandledError, toCliError } from "../lib/errors.js";
+import { CliHandledError, createCliError, toCliError } from "../lib/errors.js";
+import {
+  resolveOutputMode,
+  writeCommandError,
+  writeCommandSuccess
+} from "../lib/output.js";
 import type {
   CommandEnvelope,
   HumanRenderContext,
   ListCommandOptions,
-  OutputMode,
+  OutputOptions,
   RuntimeDependencies
 } from "../types/cli.js";
 
@@ -33,7 +37,7 @@ export const parsePositiveInteger = (value: string): number => {
   const parsedValue = Number.parseInt(value, 10);
 
   if (!Number.isInteger(parsedValue) || parsedValue <= 0) {
-    throw new InvalidArgumentError("Expected a positive integer.");
+    throw createCliError("INVALID_INPUT", "Expected a positive integer.");
   }
 
   return parsedValue;
@@ -43,7 +47,7 @@ export const parseNonNegativeInteger = (value: string): number => {
   const parsedValue = Number.parseInt(value, 10);
 
   if (!Number.isInteger(parsedValue) || parsedValue < 0) {
-    throw new InvalidArgumentError("Expected a non-negative integer.");
+    throw createCliError("INVALID_INPUT", "Expected a non-negative integer.");
   }
 
   return parsedValue;
@@ -57,9 +61,8 @@ export const addListOptions = (command: Command): Command =>
 
 export const resolveListOptions = (options: ListCommandOptions): ListCommandOptions => {
   if ((options.all ?? false) && (options.startIndex ?? 0) !== 0) {
-    throw new CommanderError(
-      1,
-      "command.invalidOption",
+    throw createCliError(
+      "INVALID_INPUT",
       "--all cannot be combined with a non-zero --start-index."
     );
   }
@@ -71,13 +74,8 @@ export const resolveListOptions = (options: ListCommandOptions): ListCommandOpti
   };
 };
 
-export const resolveOutputMode = (command: Command): OutputMode => {
-  const globalOptions = command.optsWithGlobals<{
-    json?: boolean;
-  }>();
-
-  return globalOptions.json ? "json" : "human";
-};
+const resolveOutputOptions = (command: Command): OutputOptions =>
+  command.optsWithGlobals<OutputOptions>();
 
 const DEFAULT_TERMINAL_WIDTH = 80;
 
@@ -106,7 +104,7 @@ export interface CommandExecutionContext {
   client: CompaniesHouseClient;
 }
 
-export interface ExecuteCommandOptions<TInput, TData> {
+export interface ExecuteCommandOptions<TInput, TData extends Record<string, unknown>> {
   command: Command;
   commandName: string;
   dependencies: RuntimeDependencies;
@@ -117,13 +115,15 @@ export interface ExecuteCommandOptions<TInput, TData> {
   ) => string;
 }
 
-export const executeCommand = async <TInput, TData>({
+export const executeCommand = async <TInput, TData extends Record<string, unknown>>({
   command,
+  commandName,
   dependencies,
   execute,
   renderHuman
 }: ExecuteCommandOptions<TInput, TData>): Promise<void> => {
-  const outputMode = resolveOutputMode(command);
+  const requestedAt = new Date().toISOString();
+  const outputMode = resolveOutputMode(resolveOutputOptions(command), dependencies);
 
   try {
     const config = resolveCliConfig({
@@ -138,34 +138,20 @@ export const executeCommand = async <TInput, TData>({
     const envelope = await execute({
       client
     });
+    const humanRenderContext = resolveHumanRenderContext(command, dependencies);
 
-    if (outputMode === "json") {
-      dependencies.writeStdout(`${JSON.stringify(envelope, null, 2)}\n`);
-      return;
-    }
-
-    dependencies.writeStdout(`${renderHuman(envelope, resolveHumanRenderContext(command, dependencies))}\n`);
+    writeCommandSuccess(
+      envelope,
+      requestedAt,
+      outputMode,
+      dependencies,
+      (commandEnvelope) => renderHuman(commandEnvelope, humanRenderContext)
+    );
   } catch (error) {
     const cliError = toCliError(error);
 
-    if (outputMode === "json") {
-      dependencies.writeStderr(
-        `${JSON.stringify(
-          {
-            error: {
-              code: cliError.code,
-              message: cliError.message,
-              statusCode: cliError.statusCode ?? null
-            }
-          },
-          null,
-          2
-        )}\n`
-      );
-    } else {
-      dependencies.writeStderr(`Error: ${cliError.message}\n`);
-    }
+    writeCommandError(commandName, cliError, requestedAt, outputMode, dependencies);
 
-    throw new CliHandledError();
+    throw new CliHandledError(cliError.exitCode);
   }
 };

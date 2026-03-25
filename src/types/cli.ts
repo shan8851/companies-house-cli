@@ -13,6 +13,29 @@ export interface CommandEnvelope<TInput, TData> {
   pagination?: PaginationMeta;
 }
 
+export interface JsonEnvelopeError {
+  code: string;
+  details?: unknown;
+  message: string;
+  retryable: boolean;
+}
+
+export interface ErrorEnvelope {
+  command: string;
+  error: JsonEnvelopeError;
+  ok: false;
+  requestedAt: string;
+  schemaVersion: "1";
+}
+
+export interface SuccessEnvelope<TData> {
+  command: string;
+  data: TData;
+  ok: true;
+  requestedAt: string;
+  schemaVersion: "1";
+}
+
 export interface ListCommandOptions {
   all?: boolean;
   itemsPerPage?: number;
@@ -29,7 +52,13 @@ export interface RuntimeDependencies {
   writeStdout: (text: string) => void;
 }
 
-export type OutputMode = "human" | "json";
+export interface OutputOptions {
+  color?: boolean;
+  json?: boolean;
+  text?: boolean;
+}
+
+export type OutputMode = "json" | "text";
 
 export interface HumanRenderContext {
   ansiEnabled: boolean;

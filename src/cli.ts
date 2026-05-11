@@ -17,6 +17,7 @@ import type { OutputMode, OutputOptions, RuntimeDependencies } from "./types/cli
 
 const TOP_LEVEL_HELP_EXAMPLES = [
   'ch search "Revolut"',
+  'ch search-advanced --location "County Durham" --company-status active --sic-codes 69201',
   "ch info 09215862",
   "ch officers 09215862 --all",
   "ch filings 09215862 --type accounts --include-links",

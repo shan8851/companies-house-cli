@@ -35,6 +35,20 @@ export interface SearchCompaniesRequest extends PaginatedApiRequest {
   restrictions?: string;
 }
 
+export interface AdvancedSearchCompaniesRequest extends PaginatedApiRequest {
+  companyNameIncludes?: string | undefined;
+  companyNameExcludes?: string | undefined;
+  companyStatus?: string | undefined;
+  companyType?: string | undefined;
+  companySubtype?: string | undefined;
+  dissolvedFrom?: string | undefined;
+  dissolvedTo?: string | undefined;
+  incorporatedFrom?: string | undefined;
+  incorporatedTo?: string | undefined;
+  location?: string | undefined;
+  sicCodes?: string | undefined;
+}
+
 export interface ListOfficersRequest extends PaginatedApiRequest {
   companyNumber: string;
   orderBy?: string;
@@ -159,6 +173,9 @@ export interface CompaniesHouseClient {
   listOfficers: (request: ListOfficersRequest) => Promise<OfficerListApiResponse>;
   listPsc: (request: ListPscRequest) => Promise<PscListApiResponse>;
   searchCompanies: (request: SearchCompaniesRequest) => Promise<CompanySearchApiResponse>;
+  searchCompaniesAdvanced: (
+    request: AdvancedSearchCompaniesRequest
+  ) => Promise<CompanySearchApiResponse>;
   searchOfficers: (request: SearchOfficersRequest) => Promise<OfficerSearchApiResponse>;
 }
 
@@ -300,6 +317,36 @@ export const createCompaniesHouseClient = ({
         items_per_page: itemsPerPage,
         q: query,
         restrictions,
+        start_index: startIndex
+      })) as CompanySearchApiResponse,
+    searchCompaniesAdvanced: async ({
+      companyNameExcludes,
+      companyNameIncludes,
+      companyStatus,
+      companySubtype,
+      companyType,
+      dissolvedFrom,
+      dissolvedTo,
+      incorporatedFrom,
+      incorporatedTo,
+      itemsPerPage,
+      location,
+      sicCodes,
+      startIndex
+    }) =>
+      (await requestJson<CompanySearchApiResponse>("/advanced-search/companies", {
+        company_name_excludes: companyNameExcludes,
+        company_name_includes: companyNameIncludes,
+        company_status: companyStatus,
+        company_subtype: companySubtype,
+        company_type: companyType,
+        dissolved_from: dissolvedFrom,
+        dissolved_to: dissolvedTo,
+        incorporated_from: incorporatedFrom,
+        incorporated_to: incorporatedTo,
+        items_per_page: itemsPerPage,
+        location,
+        sic_codes: sicCodes,
         start_index: startIndex
       })) as CompanySearchApiResponse,
     searchOfficers: async ({ itemsPerPage, query, startIndex }) =>

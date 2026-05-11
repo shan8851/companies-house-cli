@@ -184,6 +184,25 @@ export type SearchCompaniesEnvelope = CommandEnvelope<
   }
 >;
 
+export type AdvancedSearchCompaniesEnvelope = CommandEnvelope<
+  {
+    companyNameExcludes: string | null;
+    companyNameIncludes: string | null;
+    companyStatus: string | null;
+    companySubtype: string | null;
+    companyType: string | null;
+    dissolvedFrom: string | null;
+    dissolvedTo: string | null;
+    incorporatedFrom: string | null;
+    incorporatedTo: string | null;
+    location: string | null;
+    sicCodes: string | null;
+  },
+  {
+    companies: NormalizedCompanySearchResult[];
+  }
+>;
+
 export type CompanyInfoEnvelope = CommandEnvelope<
   {
     companyNumber: string;

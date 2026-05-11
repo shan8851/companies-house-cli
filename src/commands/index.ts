@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 
 import type { RuntimeDependencies } from "../types/cli.js";
+import { registerAdvancedSearchCompaniesCommand } from "./advancedSearchCompaniesCommand.js";
 import { registerChargesCommand } from "./chargesCommand.js";
 import { registerCompanyInfoCommand } from "./companyInfoCommand.js";
 import { registerFilingsCommand } from "./filingsCommand.js";
@@ -15,6 +16,7 @@ export const registerCommands = (
   dependencies: RuntimeDependencies
 ): void => {
   registerSearchCompaniesCommand(program, dependencies);
+  registerAdvancedSearchCompaniesCommand(program, dependencies);
   registerCompanyInfoCommand(program, dependencies);
   registerOfficersCommand(program, dependencies);
   registerFilingsCommand(program, dependencies);

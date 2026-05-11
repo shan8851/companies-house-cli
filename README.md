@@ -8,6 +8,7 @@ UK company data in your terminal. Built for AI agents, still useful for humans.
 
 ```bash
 ch search "Revolut"                     # Find companies by name
+ch search-advanced --location Durham --company-status active --sic-codes 69201
 ch info 09215862                        # Company profile
 ch officers 09215862                    # Directors & secretaries
 ch filings 09215862 --type accounts     # Filing history
@@ -48,6 +49,7 @@ export COMPANIES_HOUSE_API_KEY=your_key
 | Command | What it does |
 | --- | --- |
 | `ch search <query>` | Search companies by name |
+| `ch search-advanced` | Discover companies by location, SIC code, status, type, dates, and name filters |
 | `ch info <number>` | Company profile — address, status, SIC codes, incorporation date |
 | `ch officers <number>` | Directors, secretaries, appointments |
 | `ch filings <number>` | Filing history with optional `--type` filter and `--include-links` |
@@ -142,6 +144,17 @@ If you parse `ch` JSON programmatically, update consumers accordingly.
 $ ch search "Monzo"
 07446590  Monzo Bank Limited              Active    LONDON
 10561407  Monzo Support Limited           Active    LONDON
+
+# Discover an acquisition/research list by location and SIC code
+$ ch search-advanced --location "County Durham" --company-status active --sic-codes 69201 --items-per-page 5
+Filters: companyStatus: active · location: County Durham · sicCodes: 69201
+
+Showing 5 of 120 results.
+
+ACME ACCOUNTING LTD (12345678)
+Active
+ltd · Created 2018-04-10
+Durham, DH1 1AA
 
 # Who runs Revolut?
 $ ch officers 09215862

@@ -105,6 +105,95 @@ describe("runCli", () => {
     expect(io.stderr).toBe("");
   });
 
+  it("searches companies with advanced filters", async () => {
+    const io = {
+      stderr: "",
+      stdout: ""
+    };
+    const fetchImplementation = createQueuedFetch([
+      {
+        assertUrl: (url) => {
+          expect(url.pathname).toBe("/advanced-search/companies");
+          expect(url.searchParams.get("company_name_includes")).toBe("cleaning");
+          expect(url.searchParams.get("company_status")).toBe("active");
+          expect(url.searchParams.get("location")).toBe("Sunderland");
+          expect(url.searchParams.get("sic_codes")).toBe("81210");
+          expect(url.searchParams.get("items_per_page")).toBe("5");
+        },
+        body: {
+          items: [
+            {
+              address: {
+                locality: "Sunderland",
+                postal_code: "SR1 1AA"
+              },
+              company_number: "12345678",
+              company_status: "active",
+              company_type: "ltd",
+              date_of_creation: "2018-04-10",
+              title: "ACME CLEANING LTD"
+            }
+          ],
+          total_results: 1
+        }
+      }
+    ]);
+
+    const exitCode = await runCli(
+      [
+        "search-advanced",
+        "--company-name-includes",
+        "cleaning",
+        "--company-status",
+        "active",
+        "--location",
+        "Sunderland",
+        "--sic-codes",
+        "81210",
+        "--items-per-page",
+        "5",
+        "--json"
+      ],
+      createTestRuntimeDependencies(fetchImplementation, io)
+    );
+
+    const output = JSON.parse(io.stdout) as {
+      command: string;
+      data: {
+        companies: Array<{
+          companyNumber: string;
+          name: string;
+        }>;
+        input: {
+          companyNameIncludes: string | null;
+          companyStatus: string | null;
+          location: string | null;
+          sicCodes: string | null;
+        };
+      };
+      ok: boolean;
+    };
+
+    expect(exitCode).toBe(0);
+    expect(output.ok).toBe(true);
+    expect(output.command).toBe("search-advanced");
+    expect(output.data.input).toEqual(
+      expect.objectContaining({
+        companyNameIncludes: "cleaning",
+        companyStatus: "active",
+        location: "Sunderland",
+        sicCodes: "81210"
+      })
+    );
+    expect(output.data.companies[0]).toEqual(
+      expect.objectContaining({
+        companyNumber: "12345678",
+        name: "ACME CLEANING LTD"
+      })
+    );
+    expect(io.stderr).toBe("");
+  });
+
   it("renders normalized JSON for company info", async () => {
     const io = {
       stderr: "",
